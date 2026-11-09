@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PendingDeposit, ReceivingAddress } from '@/lib/deposits';
+import { explorerTxUrl, payCurrencyLabel } from '@/lib/payments/currencies';
 import { approve } from './actions';
-import { AlertIcon, CheckIcon, CloseIcon, CopyIcon, InboxIcon, WalletIcon } from './icons';
+import { AlertIcon, CheckIcon, CloseIcon, CopyIcon, ExternalIcon, InboxIcon, WalletIcon } from './icons';
 
 const POLL_MS = 5_000;
 const FRESH_MS = 8_000;
@@ -71,13 +72,25 @@ function copyWithTextarea(value: string) {
 	}
 }
 
+function CheckLink({ href }: { href: string }) {
+	if (!href) return null;
+
+	return (
+		<a className="check-link" href={href} target="_blank" rel="noopener noreferrer">
+			Check transaction
+			<ExternalIcon size={13} />
+		</a>
+	);
+}
+
 function CopyField(props: {
 	value: string;
 	label: string;
 	tags?: string[];
+	href?: string;
 	onCopy: (value: string, label: string) => void;
 }) {
-	const { value, label, tags = [], onCopy } = props;
+	const { value, label, tags = [], href = '', onCopy } = props;
 
 	return (
 		<div className="copy-field">
@@ -97,6 +110,7 @@ function CopyField(props: {
 					</button>
 				) : null}
 			</div>
+			<CheckLink href={href} />
 		</div>
 	);
 }
@@ -282,7 +296,13 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 								<span className="player-name">{deposit.name}</span>
 								{fresh.has(deposit.id) ? <span className="badge-new">New</span> : null}
 							</div>
-							<CopyField value={deposit.txHash} label="Tx hash" onCopy={copy} />
+							<CopyField
+								value={deposit.txHash}
+								label="Tx hash"
+								tags={deposit.payCurrency ? [payCurrencyLabel(deposit.payCurrency)] : []}
+								href={explorerTxUrl(deposit.payCurrency || '', deposit.txHash)}
+								onCopy={copy}
+							/>
 							<div className="row-action">
 								<button
 									type="button"
@@ -312,10 +332,17 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 								<dt>Player</dt>
 								<dd>{confirming.name}</dd>
 							</div>
+							{confirming.payCurrency ? (
+								<div>
+									<dt>Network</dt>
+									<dd>{payCurrencyLabel(confirming.payCurrency)}</dd>
+								</div>
+							) : null}
 							<div>
 								<dt>Tx hash</dt>
 								<dd>
 									<code>{confirming.txHash}</code>
+									<CheckLink href={explorerTxUrl(confirming.payCurrency || '', confirming.txHash)} />
 								</dd>
 							</div>
 						</dl>

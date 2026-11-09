@@ -12,6 +12,7 @@ export type PendingDeposit = {
 	id: string;
 	name: string;
 	txHash: string;
+	payCurrency: string | null;
 };
 
 export type ReceivingAddress = {
@@ -26,6 +27,7 @@ export async function listPendingDeposits(): Promise<PendingDeposit[]> {
 		select: {
 			id: true,
 			txHash: true,
+			payCurrency: true,
 			user: { select: { firstName: true, lastName: true } }
 		}
 	});
@@ -33,7 +35,8 @@ export async function listPendingDeposits(): Promise<PendingDeposit[]> {
 	return rows.map((row) => ({
 		id: row.id,
 		name: `${row.user.firstName} ${row.user.lastName}`.trim(),
-		txHash: row.txHash || ''
+		txHash: row.txHash || '',
+		payCurrency: row.payCurrency
 	}));
 }
 

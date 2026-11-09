@@ -4,3 +4,5 @@ dist
 .env
 *.tsbuildinfo
 next-env.d.ts
+*.exe
+*.apk

@@ -68,6 +68,14 @@ export const WalletIcon = (props: IconProps) => (
 	</Svg>
 );
 
+export const ExternalIcon = (props: IconProps) => (
+	<Svg {...props}>
+		<path d="M15 3h6v6" />
+		<path d="M10 14 21 3" />
+		<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+	</Svg>
+);
+
 export const InboxIcon = (props: IconProps) => (
 	<Svg {...props}>
 		<path d="M22 12h-6l-2 3h-4l-2-3H2" />
