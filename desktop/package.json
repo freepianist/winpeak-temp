@@ -1,0 +1,35 @@
+{
+  "name": "deposit-requests",
+  "productName": "Deposit Requests",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop alerts and approvals for deposit requests",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.depositrequests.desktop",
+    "productName": "Deposit Requests",
+    "files": ["main.js", "preload.js", "build/icon.png"],
+    "directories": { "output": "dist" },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "runAfterFinish": true
+    }
+  },
+  "allowScripts": {
+    "electron": true
+  }
+}
