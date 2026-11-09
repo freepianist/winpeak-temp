@@ -1,0 +1,903 @@
+// Keep in sync with the public site prisma/schema.prisma. Both apps share one
+// database, so a model missing here is a table `prisma db push` would drop.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum LedgerKind {
+  BET
+  WIN
+  CANCEL
+  DEPOSIT
+  WITHDRAW
+  BONUS
+  CASHBACK
+  REFERRAL
+}
+
+/// Which aggregator a provider, game or transaction belongs to. Lowercase so one
+/// spelling serves the database, the app's TypeScript union and the aggregators' own
+/// wire formats. Mirrors winpeak/prisma/schema.prisma.
+enum GameSource {
+  scorpio
+  oroplay
+}
+
+/// The lobby categories a game can fall under. Mirrors winpeak/prisma/schema.prisma.
+enum CatalogGameType {
+  slot
+  live
+  mini
+  fishing
+  board
+}
+
+/// A ledger entry's origin. `internal` covers money the casino moves itself, which
+/// belongs to no aggregator but still needs its own transaction id namespace.
+///
+/// `sportsbook` is the Alvaron sports provider. It is deliberately absent from
+/// `GameSource`: it has no catalog of games to mirror, only a wallet and bets.
+enum LedgerSource {
+  scorpio
+  oroplay
+  sportsbook
+  internal
+}
+
+enum PromoKind {
+  WELCOME
+  RELOAD
+  CASHBACK
+  REFERRAL
+}
+
+enum PromoStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum PlayerBonusStatus {
+  ACTIVE
+  COMPLETED
+  FORFEITED
+  EXPIRED
+}
+
+enum WalletRequestType {
+  DEPOSIT
+  WITHDRAW
+}
+
+enum WalletRequestStatus {
+  PENDING
+  PROCESSING
+  APPROVED
+  REJECTED
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum AffiliateDealType {
+  CPA
+  REVSHARE
+  HYBRID
+}
+
+enum AffiliateStatus {
+  INVITED
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum CommissionKind {
+  CPA
+  REVSHARE
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  VOID
+}
+
+enum PayoutStatus {
+  PENDING
+  SENT
+}
+
+enum AuthTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+/// Where a support conversation sits between the bot and the agent desk.
+/// `BOT` means the AI answers every visitor message; once a conversation reaches
+/// `WAITING_AGENT` the bot goes quiet for good and staff own the thread.
+enum SupportStatus {
+  BOT
+  WAITING_AGENT
+  AGENT
+  RESOLVED
+}
+
+enum SupportAuthor {
+  VISITOR
+  BOT
+  AGENT
+  SYSTEM
+}
+
+model AuthToken {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  failedAttempts Int      @default(0)
+  createdAt DateTime      @default(now())
+
+  @@index([userId, type])
+}
+
+enum StaffRole {
+  AFFILIATE_MANAGER
+  SUPPORT_AGENT
+}
+
+enum StaffStatus {
+  ACTIVE
+  DISABLED
+}
+
+model StaffAccount {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  name         String
+  role         StaffRole   @default(AFFILIATE_MANAGER)
+  status       StaffStatus @default(ACTIVE)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  partners     AffiliatePartner[]
+
+  @@index([status])
+}
+
+model User {
+  id                    String                 @id @default(cuid())
+  email                 String                 @unique
+  passwordHash          String
+  firstName             String
+  lastName              String
+  scorpioPlayerCode     Int?
+  /// What Oroplay knows this player as, rendered by vendors as their name.
+  /// Mirrors winpeak/prisma/schema.prisma.
+  oroplayUserCode       String?                @unique
+  /// The name this player bets under at the sportsbook, shown in its interface.
+  /// Minted on first launch and never changed: the wallet callbacks identify the
+  /// member by this and nothing else, so a rename would orphan open coupons.
+  sportsbookUsername    String?                @unique
+  status                UserStatus             @default(ACTIVE)
+  notes                 String?
+  referredByAffiliateId String?
+  referredBy            AffiliatePartner?      @relation(fields: [referredByAffiliateId], references: [id], onDelete: SetNull)
+  referralCode          String?                @unique
+  referredByUserId      String?
+  referredByUser        User?                  @relation("PlayerReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
+  referrals             User[]                 @relation("PlayerReferrals")
+  firstDepositAt        DateTime?
+  /// When this player was handed to Tag Manager as a qualified CPA lead.
+  /// Mirrors winpeak/prisma/schema.prisma.
+  cpaQualifiedAt        DateTime?
+  emailVerifiedAt       DateTime?
+  dateOfBirth           DateTime?
+  ageVerifiedAt         DateTime?
+  country               String?
+  /// The local market (ISO alpha-2) the account was opened in. Null is USD on
+  /// the default agents. Mirrors winpeak/prisma/schema.prisma.
+  market                String?
+  lastIp                String?
+  sessionVersion        Int                    @default(1)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  wallet                Wallet?
+  ledger                LedgerEntry[]
+  walletRequests        WalletRequest[]
+  reviews               GameReview[]
+  reviewReplies         GameReviewReply[]
+  commissions           AffiliateCommission[]
+  authTokens            AuthToken[]
+  bonuses               PlayerBonus[]
+  cashbackPayouts       CashbackPayout[]
+  referralRewardsGiven  ReferralReward[]       @relation("ReferralRewardsGiven")
+  referralRewardReceived ReferralReward?       @relation("ReferralRewardReceived")
+  supportConversations  SupportConversation[]
+  sportsBets            SportsBet[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([referredByAffiliateId])
+  @@index([referredByUserId])
+  @@index([country])
+  @@index([market])
+}
+
+model Wallet {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance      Decimal  @default(0) @db.Decimal(18, 4)
+  heldBalance  Decimal  @default(0) @db.Decimal(18, 4)
+  bonusBalance Decimal  @default(0) @db.Decimal(18, 4)
+  currency     String   @default("USD")
+  updatedAt    DateTime @updatedAt
+}
+
+model WalletRequest {
+  id             String              @id @default(cuid())
+  userId         String
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           WalletRequestType
+  amount         Decimal             @db.Decimal(18, 4)
+  status         WalletRequestStatus @default(PENDING)
+  note           String?
+  reviewNote     String?
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  payCurrency    String?
+  payoutAddress  String?
+  invoiceUrl     String?
+  providerRef    String?             @unique
+  providerStatus String?
+  // NOWPayments payment id, distinct from providerRef (the invoice id). Needed to
+  // send a player back to the payment they already started instead of a new one.
+  providerPaymentId String?
+  // Coin units the player actually sent, and what they were worth in USD once
+  // credited. Both are tracked because a deposit can be paid in instalments, so
+  // creditedAmount is the running total already in the wallet.
+  paidAmount     Decimal?            @db.Decimal(18, 8)
+  creditedAmount Decimal?            @db.Decimal(18, 4)
+  /// When a credited deposit was handed to Tag Manager. Mirrors winpeak/prisma/schema.prisma.
+  gtmPurchaseAt  DateTime?
+  // EXACT, UNDERPAID or OVERPAID, compared against the invoiced amount
+  paymentOutcome String?
+  autoProcessed  Boolean             @default(false)
+  // Raised in manual mode, so there is no invoice or payout at NOWPayments and
+  // staff settle it by hand. Approval reads this to know which rail to use.
+  manual         Boolean             @default(false)
+  // The transfer the player says they sent for a manual deposit. Unique so the
+  // same on-chain transaction cannot be claimed on a second request.
+  txHash         String?             @unique
+  // Custody conversion funding a payout in a coin other than the settlement currency
+  conversionId     String?
+  conversionStatus String?
+  // What the casino actually received/spent in its settlement currency
+  settleCurrency String?
+  settleAmount   Decimal?            @db.Decimal(18, 8)
+  // "daypgl" for the local-currency rail; null is the crypto rail.
+  provider       String?
+  // Local rail only. `amount` is in the wallet's currency; these record the
+  // local-currency figure DAYPGL was asked for and the rate it was priced at
+  // (local units per wallet unit), locked when the request was raised.
+  country        String?
+  localCurrency  String?
+  localAmount    Decimal?            @db.Decimal(18, 4)
+  fxRate         Decimal?            @db.Decimal(18, 8)
+  // Wallet-currency units per 1 USD on a non-USD wallet; null means 1.
+  usdRate        Decimal?            @db.Decimal(18, 8)
+  // DAYPGL trade_type for a deposit, bank_code for a payout
+  channel        String?
+  // Payout recipient; the account number itself lives in payoutAddress
+  payeeName      String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  payments       DepositPayment[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([conversionId])
+  @@index([provider, status])
+}
+
+/**
+ * One row per NOWPayments payment against a deposit invoice. An invoice can hold
+ * several payments, so crediting has to be tracked per payment: without this a
+ * player paying the same invoice twice looks identical to one callback arriving
+ * twice, and the second payment gets swallowed as a duplicate.
+ */
+model DepositPayment {
+  id             String        @id @default(cuid())
+  requestId      String
+  request        WalletRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  // NOWPayments payment id. Invoices settled before this table existed are
+  // backfilled under a "legacy:<requestId>" key so totals stay correct.
+  paymentId      String        @unique
+  paidAmount     Decimal?      @db.Decimal(18, 8)
+  creditedAmount Decimal       @default(0) @db.Decimal(18, 4)
+  providerStatus String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([requestId])
+}
+
+model LedgerEntry {
+  id           String     @id @default(cuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source       LedgerSource @default(internal)
+  providerTxId String?
+  referenceId  String?
+  roundId      String?
+  kind         LedgerKind
+  amount       Decimal    @db.Decimal(18, 4)
+  /// The slice of a BET that came out of the bonus balance, so cash-only turnover
+  /// can be measured as `amount - bonusAmount`. Zero on every other kind, and on
+  /// bets written before this column existed.
+  bonusAmount  Decimal    @default(0) @db.Decimal(18, 4)
+  balanceAfter Decimal    @db.Decimal(18, 4)
+  /// Scorpio's numeric provider id or Oroplay's vendor code, stored as the source
+  /// spells it. Null on internal entries, which belong to no provider.
+  providerId   String?
+  gameCode     String?
+  createdAt    DateTime   @default(now())
+
+  @@unique([source, providerTxId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([source, roundId])
+  @@index([referenceId])
+  @@index([source, providerId, gameCode])
+  /// The public wins feed reads the newest WIN rows across every player.
+  @@index([kind, createdAt(sort: Desc)])
+}
+
+model GameReview {
+  id          String            @id @default(cuid())
+  source      GameSource
+  providerId  String
+  gameCode    String
+  userId      String?
+  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  authorName  String
+  authorEmail String
+  rating      Int
+  content     String
+  createdAt   DateTime          @default(now())
+  replies     GameReviewReply[]
+
+  @@index([source, providerId, gameCode, createdAt(sort: Desc)])
+}
+
+model GameReviewReply {
+  id         String     @id @default(cuid())
+  reviewId   String
+  review     GameReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  authorName String
+  content    String
+  createdAt  DateTime   @default(now())
+
+  @@index([reviewId, createdAt])
+}
+
+model BlogPost {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  title       String
+  excerpt     String
+  body        String        @db.Text
+  image       String
+  tag         String
+  author      String
+  authorImage String
+  publishedAt DateTime      @default(now())
+  comments    BlogComment[]
+
+  @@index([publishedAt(sort: Desc)])
+}
+
+model BlogComment {
+  id          String   @id @default(cuid())
+  postId      String
+  post        BlogPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorName  String
+  authorEmail String
+  content     String
+  createdAt   DateTime @default(now())
+
+  @@index([postId, createdAt])
+}
+
+model SuccessStory {
+  id         String   @id @default(cuid())
+  authorName String
+  role       String   @default("Player")
+  content    String
+  image      String   @default("/images/avatar/one.png")
+  rating     Int      @default(5)
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+}
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  phone     String   @default("")
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([read])
+}
+
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
+
+/// One live chat thread. `userId` is null for visitors who have not signed in;
+/// they are held by `guestKey` instead, which the signed support cookie carries so
+/// a transcript cannot be read by guessing an id. Both ends poll this table, so
+/// `lastMessageAt` is maintained on every write to keep the queue ordered without
+/// joining the messages.
+model SupportConversation {
+  id                String           @id @default(cuid())
+  userId            String?
+  user              User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  guestKey          String?
+  email             String           @default("")
+  name              String           @default("")
+  status            SupportStatus    @default(BOT)
+  assignedStaffId   String?
+  assignedStaffName String           @default("")
+  handoffReason     String           @default("")
+  lastMessageAt     DateTime         @default(now())
+  unreadForAgent    Int              @default(0)
+  unreadForVisitor  Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  messages          SupportMessage[]
+
+  @@index([status, lastMessageAt(sort: Desc)])
+  @@index([userId])
+  @@index([guestKey])
+}
+
+model SupportMessage {
+  id             String              @id @default(cuid())
+  conversationId String
+  conversation   SupportConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author         SupportAuthor
+  body           String              @db.Text
+  authorName     String              @default("")
+  staffId        String?
+  createdAt      DateTime            @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model AffiliatePartner {
+  id              String                 @id @default(cuid())
+  email           String                 @unique
+  name            String
+  passwordHash    String?
+  code            String                 @unique
+  dealType        AffiliateDealType
+  cpaAmount       Decimal?               @db.Decimal(18, 4)
+  revSharePercent Decimal?               @db.Decimal(6, 2)
+  minFtdAmount    Decimal                @default(0) @db.Decimal(18, 4)
+  /// Cash wagering, in USD, a referred player must turn over before a CPA is
+  /// booked. Zero leaves the deal qualifying on the deposit alone.
+  minWagerAmount  Decimal                @default(0) @db.Decimal(18, 4)
+  status          AffiliateStatus        @default(INVITED)
+  notes           String?
+  /// The affiliate manager who owns this partner and the only one who sees it.
+  /// Null leaves the partner to admins until one is assigned.
+  managerId       String?
+  manager         StaffAccount?          @relation(fields: [managerId], references: [id], onDelete: SetNull)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  players         User[]
+  commissions     AffiliateCommission[]
+  payouts         AffiliatePayout[]
+  clicks          AffiliateClick[]
+
+  @@index([status])
+  @@index([code])
+  @@index([managerId])
+}
+
+/// A visit to the public site with this partner's ?ref= tracking code.
+model AffiliateClick {
+  id          String           @id @default(cuid())
+  partnerId   String
+  partner     AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  visitorKey  String
+  landingPath String
+  referrer    String           @default("")
+  eventType   String           @default("")
+  tabId       String           @default("")
+  deviceType  String           @default("")
+  os          String           @default("")
+  browser     String           @default("")
+  country     String           @default("")
+  region      String           @default("")
+  city        String           @default("")
+  createdAt   DateTime         @default(now())
+
+  @@index([partnerId, createdAt(sort: Desc)])
+  @@index([partnerId, visitorKey])
+}
+
+model AffiliateCommission {
+  id          String           @id @default(cuid())
+  partnerId   String
+  partner     AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  kind        CommissionKind
+  amount      Decimal          @db.Decimal(18, 4)
+  basisAmount Decimal          @default(0) @db.Decimal(18, 4)
+  status      CommissionStatus @default(PENDING)
+  payoutId    String?
+  payout      AffiliatePayout? @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now())
+
+  @@index([partnerId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([payoutId])
+}
+
+model AffiliatePayout {
+  id          String                @id @default(cuid())
+  partnerId   String
+  partner     AffiliatePartner      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  amount      Decimal               @db.Decimal(18, 4)
+  status      PayoutStatus          @default(PENDING)
+  note        String?
+  commissions AffiliateCommission[]
+  createdAt   DateTime              @default(now())
+
+  @@index([partnerId, createdAt(sort: Desc)])
+}
+
+/**
+ * Amounts are held in USD whatever the market, and priced into the player's
+ * currency at the rate their wallet runs on, the same way the payment floors
+ * are.
+ */
+model PromoOffer {
+  id String @id @default(cuid())
+  /// The market (ISO alpha-2, as `User.market` spells it) this offer runs in.
+  /// Null is the house offer, which every market falls back to when it has none
+  /// of its own for the slot. Not a foreign key, so that it survives a market
+  /// being reconfigured, exactly like `User.market`.
+  market          String?
+  slug            String
+  kind            PromoKind
+  name            String
+  headline        String
+  details         String        @db.Text
+  /// The currency the amount columns below are written in. Null is the house
+  /// set's USD, priced into the player's wallet at their market's rate. A
+  /// market's own offer carries that market's currency, so its amounts are
+  /// already the figures the player sees and are never re-priced.
+  currency        String?
+  matchPercent    Decimal       @default(0) @db.Decimal(8, 2)
+  maxAmount       Decimal       @default(0) @db.Decimal(18, 4)
+  minDeposit      Decimal       @default(20) @db.Decimal(18, 4)
+  wagerMultiplier Decimal       @default(0) @db.Decimal(8, 2)
+  expireDays      Int           @default(14)
+  maxBet          Decimal       @default(5) @db.Decimal(18, 4)
+  depositNumber   Int?
+  rewardAmount    Decimal       @default(0) @db.Decimal(18, 4)
+  status          PromoStatus   @default(ACTIVE)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  bonuses         PlayerBonus[]
+
+  // Postgres counts nulls as distinct here, so the house set's slugs are kept
+  // unique by the partial index the migration adds alongside this one.
+  @@unique([market, slug])
+  @@index([kind, status])
+  @@index([market, kind, status])
+}
+
+model PlayerBonus {
+  id             String            @id @default(cuid())
+  userId         String
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offerId        String
+  offer          PromoOffer        @relation(fields: [offerId], references: [id], onDelete: Restrict)
+  status         PlayerBonusStatus @default(ACTIVE)
+  bonusAmount    Decimal           @db.Decimal(18, 4)
+  wagerRequired  Decimal           @db.Decimal(18, 4)
+  wagerRemaining Decimal           @db.Decimal(18, 4)
+  depositAmount  Decimal           @default(0) @db.Decimal(18, 4)
+  expiresAt      DateTime?
+  grantedAt      DateTime          @default(now())
+  completedAt    DateTime?
+  note           String?
+
+  @@index([userId, status])
+  @@index([offerId])
+}
+
+model CashbackPayout {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  offerId     String?
+  periodStart DateTime
+  periodEnd   DateTime
+  netLoss     Decimal  @db.Decimal(18, 4)
+  amount      Decimal  @db.Decimal(18, 4)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, periodStart])
+  @@index([periodStart])
+}
+
+model ReferralReward {
+  id         String   @id @default(cuid())
+  referrerId String
+  referrer   User     @relation("ReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredId String   @unique
+  referred   User     @relation("ReferralRewardReceived", fields: [referredId], references: [id], onDelete: Cascade)
+  amount     Decimal  @db.Decimal(18, 4)
+  createdAt  DateTime @default(now())
+
+  @@index([referrerId])
+}
+
+model BlockedCountry {
+  code      String   @id
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/**
+ * Single row ("default") holding the payment rail the casino is running on.
+ * Kept in the database rather than the environment so staff can switch rails
+ * without a redeploy.
+ */
+model PaymentSettings {
+  id                String   @id @default("default")
+  // When on, deposits and withdrawals skip NOWPayments entirely and are
+  // settled by staff from the wallet requests queue.
+  manualMode        Boolean  @default(false)
+  // Manual-rail floors, in USD. Nothing is invoiced or converted on that rail,
+  // so the per-network figures NOWPayments quotes do not apply and staff set
+  // these by hand instead.
+  manualMinDeposit  Float    @default(20)
+  manualMinWithdraw Float    @default(20)
+  updatedBy         String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+/** The casino's own receiving wallet for one network, used in manual mode. */
+model ManualWallet {
+  payCurrency String   @id
+  address     String
+  qrImageUrl  String?
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// A local market, offered to visitors located in the country. Once it has both
+/// game agents, accounts opened there hold its currency and play on those agents.
+/// Mirrors winpeak/prisma/schema.prisma.
+model LocalPaymentCountry {
+  /// ISO 3166 alpha-2, as DAYPGL's `country` parameter spells it
+  country           String                @id
+  currency          String
+  /// Local currency units per 1 USD
+  fxRate            Decimal               @db.Decimal(18, 8)
+  depositSpreadPct  Float                 @default(0)
+  withdrawSpreadPct Float                 @default(0)
+  /// Smallest local deposit and payout, in this market's own currency
+  minDepositLocal   Float                 @default(10)
+  minWithdrawLocal  Float                 @default(10)
+  enabled           Boolean               @default(false)
+  scorpioAgentId    String?
+  scorpioAgent      GameAgent?            @relation("ScorpioAgentCountries", fields: [scorpioAgentId], references: [id], onDelete: Restrict)
+  oroplayAgentId    String?
+  oroplayAgent      GameAgent?            @relation("OroplayAgentCountries", fields: [oroplayAgentId], references: [id], onDelete: Restrict)
+  updatedBy         String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  channels          LocalPaymentChannel[]
+}
+
+/// A game aggregator account in one currency, assigned to local markets.
+/// Mirrors winpeak/prisma/schema.prisma.
+model GameAgent {
+  id                  String                @id @default(cuid())
+  label               String
+  source              GameSource
+  currency            String
+  apiBaseUrl          String
+  language            String?
+  apiTokenEnc         String?
+  clientId            String?
+  clientSecretEnc     String?
+  proxyUrl            String?
+  enabled             Boolean               @default(true)
+  /// When the public site's catalog sync last read this agent's provider list
+  catalogSyncedAt     DateTime?
+  updatedBy           String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  scorpioCountries    LocalPaymentCountry[] @relation("ScorpioAgentCountries")
+  oroplayCountries    LocalPaymentCountry[] @relation("OroplayAgentCountries")
+  catalogProviders    CatalogProviderAgent[]
+
+  @@unique([source, clientId])
+}
+
+/// A DAYPGL payment method in one country: a `trade_type` for deposits or a
+/// `bank_code` for payouts, copied from the merchant portal.
+model LocalPaymentChannel {
+  id          String              @id @default(cuid())
+  country     String
+  countryRow  LocalPaymentCountry @relation(fields: [country], references: [country], onDelete: Cascade)
+  kind        WalletRequestType
+  code        String
+  label       String
+  enabled     Boolean             @default(true)
+  sortOrder   Int                 @default(0)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([country, kind, code])
+  @@index([country, kind])
+}
+
+/// A studio the public site mirrors from an aggregator for its game lobby. The
+/// site owns these rows; the admin never reads them.
+model CatalogProvider {
+  source       GameSource
+  providerId   String
+  providerName String
+  slug         String
+  logo         String?
+  types        CatalogGameType[]
+  isActive     Boolean           @default(true)
+  syncedAt     DateTime          @default(now())
+  agents       CatalogProviderAgent[]
+
+  @@id([source, providerId])
+  @@index([slug])
+  @@index([isActive])
+}
+
+/// A studio a local market's game agent can open. The public site's catalog
+/// sync owns these rows; deleting an agent removes its own.
+model CatalogProviderAgent {
+  agentId    String
+  agent      GameAgent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  source     GameSource
+  providerId String
+  provider   CatalogProvider @relation(fields: [source, providerId], references: [source, providerId], onDelete: Cascade)
+  syncedAt   DateTime        @default(now())
+
+  @@id([agentId, source, providerId])
+  @@index([source, providerId])
+}
+
+/// A game the public site mirrors from an aggregator for its game lobby.
+model CatalogGame {
+  id           String          @id
+  source       GameSource
+  providerId   String
+  providerName String
+  gameCode     String
+  title        String
+  image        String
+  gameType     CatalogGameType
+  slug         String
+  providerSlug String
+  searchText   String
+  isNew        Boolean         @default(false)
+  isActive     Boolean         @default(true)
+  syncedAt     DateTime        @default(now())
+
+  @@index([isActive, gameType])
+  @@index([isActive, source, providerId])
+  @@index([providerSlug, slug])
+  @@index([searchText])
+}
+
+/// The latest snapshot of one sportsbook coupon, rebuilt from its callbacks.
+///
+/// The sportsbook owns the authoritative bet; this mirror exists so admin and the
+/// account page can show bet history without a provider round trip. No money is
+/// ever derived from this table — only `wallet.*` callbacks move a balance, and
+/// they do it through LedgerEntry.
+model SportsBet {
+  /// The provider's `bet_id`, which groups every event belonging to one bet.
+  betId            String    @id
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// `raw_payload.status`: open, won, lost, refunded or cashout. Read this rather
+  /// than inferring a result from an event name's revision suffix.
+  status           String
+  statusLabel      String?
+  /// single, combo or system.
+  betType          String?
+  currency         String
+  totalStake       Decimal   @db.Decimal(18, 4)
+  possibleWin      Decimal   @default(0) @db.Decimal(18, 4)
+  /// Cumulative payout, cashouts included. Never credited from here.
+  payout           Decimal   @default(0) @db.Decimal(18, 4)
+  totalOdds        Decimal?  @db.Decimal(18, 6)
+  displayedOdds    String?
+  /// The settlement and cashout revision, shared between the two, so a correction
+  /// can be told apart from the settlement it replaces.
+  revision         Int       @default(0)
+  /// Ordering within this one bet. A delivery that overtakes another carries a
+  /// lower sequence than the stored snapshot and is ignored.
+  sequence         Int       @default(0)
+  selectionCount   Int       @default(0)
+  cashoutCount     Int       @default(0)
+  /// Fraction of the original stake still live after any partial cashout.
+  remainingRatio   Decimal?  @db.Decimal(18, 12)
+  settlementLocked Boolean   @default(false)
+  errorCode        String?
+  selections       Json?
+  cashoutSummary   Json?
+  settlement       Json?
+  placedAt         DateTime
+  settledAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId, placedAt(sort: Desc)])
+  @@index([status])
+  @@index([placedAt(sort: Desc)])
+}
+
+/// One delivered sportsbook callback and the reply it was answered with.
+///
+/// The provider retries a delivery up to 20 times and requires an identical
+/// repeat to receive the *same* response, so the reply is stored rather than
+/// recomputed. `bodyHash` separates a genuine retry from a different operation
+/// reusing the key, which has to be refused with a 409 instead.
+model SportsCallback {
+  id             String   @id @default(cuid())
+  siteKey        String
+  idempotencyKey String
+  eventId        String?
+  event          String
+  betId          String?
+  userId         String?
+  /// SHA-256 of the exact request bytes the signature was verified over.
+  bodyHash       String
+  /// The JSON body returned to the provider, replayed verbatim on a retry.
+  responseJson   Json
+  createdAt      DateTime @default(now())
+
+  @@unique([siteKey, idempotencyKey])
+  @@index([betId])
+  @@index([createdAt])
+}
