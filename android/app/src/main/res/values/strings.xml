@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Deposit Requests</string>
+    <string name="dashboard_url">https://winpeak-temp.vercel.app</string>
+    <string name="channel_alerts">Deposit alerts</string>
+    <string name="channel_status">Background watcher</string>
+</resources>

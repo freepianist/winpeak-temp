@@ -11,7 +11,7 @@ const FRESH_MS = 8_000;
 type DesktopBridge = {
 	notify: (title: string, body: string) => void;
 	setPendingCount: (count: number) => void;
-	copy?: (text: string) => Promise<boolean>;
+	copy?: (text: string) => boolean | Promise<boolean>;
 };
 
 declare global {
@@ -219,7 +219,9 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 
 	const copy = async (value: string, label: string) => {
 		const copied = window.desktop?.copy
-			? await window.desktop.copy(value).catch(() => false)
+			? await Promise.resolve()
+					.then(() => window.desktop!.copy!(value))
+					.catch(() => false)
 			: await navigator.clipboard
 					.writeText(value)
 					.then(() => true)
