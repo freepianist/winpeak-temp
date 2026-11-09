@@ -52,6 +52,32 @@ function since(date: Date | null, now: number) {
 	return seconds < 2 ? 'just now' : `${seconds}s ago`;
 }
 
+function CopyField(props: {
+	value: string;
+	label: string;
+	tag?: string;
+	onCopy: (value: string, label: string) => void;
+}) {
+	const { value, label, tag, onCopy } = props;
+
+	return (
+		<div className="copy-field">
+			<div className="field-head">
+				<span className="caption">{label}</span>
+				{tag ? <span className="network">{tag}</span> : null}
+			</div>
+			<div className="copy-line">
+				<code title={value}>{value || '—'}</code>
+				{value ? (
+					<button type="button" className="icon-btn" onClick={() => onCopy(value, label)} title={`Copy ${label.toLowerCase()}`}>
+						<CopyIcon size={14} />
+					</button>
+				) : null}
+			</div>
+		</div>
+	);
+}
+
 export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
 	const [deposits, setDeposits] = useState(initial);
 	const [fresh, setFresh] = useState<Set<string>>(new Set());
@@ -165,10 +191,10 @@ export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
 		}, 350);
 	};
 
-	const copy = async (hash: string) => {
+	const copy = async (value: string, label: string) => {
 		try {
-			await navigator.clipboard.writeText(hash);
-			pushToast({ kind: 'success', title: 'Tx hash copied' });
+			await navigator.clipboard.writeText(value);
+			pushToast({ kind: 'success', title: `${label} copied` });
 		} catch {
 			pushToast({ kind: 'error', title: 'Could not copy' });
 		}
@@ -198,6 +224,7 @@ export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
 					<div className="row row-head">
 						<span>Player</span>
 						<span>Transaction hash</span>
+						<span>Receiving address</span>
 						<span />
 					</div>
 				) : null}
@@ -223,14 +250,8 @@ export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
 								<span className="player-name">{deposit.name}</span>
 								{fresh.has(deposit.id) ? <span className="badge-new">New</span> : null}
 							</div>
-							<div className="hash">
-								<code title={deposit.txHash}>{deposit.txHash || '—'}</code>
-								{deposit.txHash ? (
-									<button type="button" className="icon-btn" onClick={() => copy(deposit.txHash)} title="Copy tx hash">
-										<CopyIcon size={14} />
-									</button>
-								) : null}
-							</div>
+							<CopyField value={deposit.txHash} label="Tx hash" onCopy={copy} />
+							<CopyField value={deposit.address} label="Receiving address" tag={deposit.network} onCopy={copy} />
 							<div className="row-action">
 								<button
 									type="button"
@@ -264,6 +285,13 @@ export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
 								<dt>Tx hash</dt>
 								<dd>
 									<code>{confirming.txHash}</code>
+								</dd>
+							</div>
+							<div>
+								<dt>Sent to</dt>
+								<dd>
+									{confirming.network ? <span className="network">{confirming.network}</span> : null}
+									<code>{confirming.address || 'Unknown'}</code>
 								</dd>
 							</div>
 						</dl>

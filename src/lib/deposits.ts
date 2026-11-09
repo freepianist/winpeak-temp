@@ -4,6 +4,7 @@ import { money } from '@/lib/money';
 import { accrueAffiliateCpa } from '@/lib/affiliates';
 import { grantDepositPromos } from '@/lib/promos';
 import { notifyWalletOutcome } from '@/lib/payments/notify';
+import { payCurrencyLabel } from '@/lib/payments/currencies';
 
 const TX = { maxWait: 15_000, timeout: 30_000 } as const;
 
@@ -11,23 +12,39 @@ export type PendingDeposit = {
 	id: string;
 	name: string;
 	txHash: string;
+	address: string;
+	network: string;
 };
 
+/** The player site writes the wallet shown to the player as "Sent to <address>[ · …]". */
+function addressFromNote(note: string | null) {
+	const match = note?.match(/^Sent to (\S+)/);
+	return match ? match[1] : '';
+}
+
 export async function listPendingDeposits(): Promise<PendingDeposit[]> {
-	const rows = await prisma.walletRequest.findMany({
-		where: { type: 'DEPOSIT', status: 'PENDING', manual: true },
-		orderBy: { createdAt: 'desc' },
-		select: {
-			id: true,
-			txHash: true,
-			user: { select: { firstName: true, lastName: true } }
-		}
-	});
+	const [rows, wallets] = await Promise.all([
+		prisma.walletRequest.findMany({
+			where: { type: 'DEPOSIT', status: 'PENDING', manual: true },
+			orderBy: { createdAt: 'desc' },
+			select: {
+				id: true,
+				txHash: true,
+				note: true,
+				payCurrency: true,
+				user: { select: { firstName: true, lastName: true } }
+			}
+		}),
+		prisma.manualWallet.findMany({ select: { payCurrency: true, address: true } })
+	]);
+	const currentAddress = new Map(wallets.map((wallet) => [wallet.payCurrency, wallet.address.trim()]));
 
 	return rows.map((row) => ({
 		id: row.id,
 		name: `${row.user.firstName} ${row.user.lastName}`.trim(),
-		txHash: row.txHash || ''
+		txHash: row.txHash || '',
+		address: addressFromNote(row.note) || currentAddress.get(row.payCurrency || '') || '',
+		network: row.payCurrency ? payCurrencyLabel(row.payCurrency) : ''
 	}));
 }
 
