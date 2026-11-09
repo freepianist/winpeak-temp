@@ -1,7 +1,9 @@
 import { isSignedIn } from '@/lib/auth';
 import { listPendingDeposits } from '@/lib/deposits';
 import { logout } from './actions';
-import { DepositTable, LoginForm } from './components';
+import { DepositBoard } from './deposit-board';
+import { LogOutIcon } from './icons';
+import { LoginForm } from './login-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,16 +15,22 @@ export default async function Page() {
 	const deposits = await listPendingDeposits();
 
 	return (
-		<main>
-			<header>
-				<h1>Deposit requests</h1>
+		<div className="shell">
+			<header className="topbar">
+				<div className="brand">
+					<img src="/brand.png" alt="" />
+					<span>Deposit Requests</span>
+				</div>
 				<form action={logout}>
-					<button type="submit" className="link">
+					<button type="submit" className="btn btn-ghost btn-sm">
+						<LogOutIcon size={15} />
 						Sign out
 					</button>
 				</form>
 			</header>
-			<DepositTable initial={deposits} />
-		</main>
+			<main className="content">
+				<DepositBoard initial={deposits} />
+			</main>
+		</div>
 	);
 }
