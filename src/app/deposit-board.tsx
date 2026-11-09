@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { PendingDeposit } from '@/lib/deposits';
+import type { PendingDeposit, ReceivingAddress } from '@/lib/deposits';
 import { approve } from './actions';
-import { AlertIcon, CheckIcon, CopyIcon, InboxIcon } from './icons';
+import { AlertIcon, CheckIcon, CopyIcon, InboxIcon, WalletIcon } from './icons';
 
 const POLL_MS = 5_000;
 const FRESH_MS = 8_000;
@@ -55,16 +55,20 @@ function since(date: Date | null, now: number) {
 function CopyField(props: {
 	value: string;
 	label: string;
-	tag?: string;
+	tags?: string[];
 	onCopy: (value: string, label: string) => void;
 }) {
-	const { value, label, tag, onCopy } = props;
+	const { value, label, tags = [], onCopy } = props;
 
 	return (
 		<div className="copy-field">
 			<div className="field-head">
 				<span className="caption">{label}</span>
-				{tag ? <span className="network">{tag}</span> : null}
+				{tags.map((tag) => (
+					<span key={tag} className="network">
+						{tag}
+					</span>
+				))}
 			</div>
 			<div className="copy-line">
 				<code title={value}>{value || '—'}</code>
@@ -78,7 +82,7 @@ function CopyField(props: {
 	);
 }
 
-export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
+export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; wallets: ReceivingAddress[] }) {
 	const [deposits, setDeposits] = useState(initial);
 	const [fresh, setFresh] = useState<Set<string>>(new Set());
 	const [leaving, setLeaving] = useState<Set<string>>(new Set());
@@ -202,6 +206,24 @@ export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
 
 	return (
 		<>
+			<section className="wallets">
+				<div className="section-title">
+					<WalletIcon size={16} />
+					<h2>Receiving addresses</h2>
+				</div>
+				{wallets.length === 0 ? (
+					<p className="muted">No receiving wallets are enabled right now.</p>
+				) : (
+					<div className="wallet-grid">
+						{wallets.map((wallet) => (
+							<div key={wallet.address} className="wallet-card">
+								<CopyField value={wallet.address} label="Address" tags={wallet.networks} onCopy={copy} />
+							</div>
+						))}
+					</div>
+				)}
+			</section>
+
 			<section className="board-head">
 				<div>
 					<h2>Pending deposits</h2>
@@ -224,7 +246,6 @@ export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
 					<div className="row row-head">
 						<span>Player</span>
 						<span>Transaction hash</span>
-						<span>Receiving address</span>
 						<span />
 					</div>
 				) : null}
@@ -251,7 +272,6 @@ export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
 								{fresh.has(deposit.id) ? <span className="badge-new">New</span> : null}
 							</div>
 							<CopyField value={deposit.txHash} label="Tx hash" onCopy={copy} />
-							<CopyField value={deposit.address} label="Receiving address" tag={deposit.network} onCopy={copy} />
 							<div className="row-action">
 								<button
 									type="button"
@@ -285,13 +305,6 @@ export function DepositBoard({ initial }: { initial: PendingDeposit[] }) {
 								<dt>Tx hash</dt>
 								<dd>
 									<code>{confirming.txHash}</code>
-								</dd>
-							</div>
-							<div>
-								<dt>Sent to</dt>
-								<dd>
-									{confirming.network ? <span className="network">{confirming.network}</span> : null}
-									<code>{confirming.address || 'Unknown'}</code>
 								</dd>
 							</div>
 						</dl>

@@ -4,7 +4,7 @@ import { money } from '@/lib/money';
 import { accrueAffiliateCpa } from '@/lib/affiliates';
 import { grantDepositPromos } from '@/lib/promos';
 import { notifyWalletOutcome } from '@/lib/payments/notify';
-import { payCurrencyLabel } from '@/lib/payments/currencies';
+import { PAY_CURRENCIES, payCurrencyLabel } from '@/lib/payments/currencies';
 
 const TX = { maxWait: 15_000, timeout: 30_000 } as const;
 
@@ -12,40 +12,50 @@ export type PendingDeposit = {
 	id: string;
 	name: string;
 	txHash: string;
-	address: string;
-	network: string;
 };
 
-/** The player site writes the wallet shown to the player as "Sent to <address>[ · …]". */
-function addressFromNote(note: string | null) {
-	const match = note?.match(/^Sent to (\S+)/);
-	return match ? match[1] : '';
-}
+export type ReceivingAddress = {
+	address: string;
+	networks: string[];
+};
 
 export async function listPendingDeposits(): Promise<PendingDeposit[]> {
-	const [rows, wallets] = await Promise.all([
-		prisma.walletRequest.findMany({
-			where: { type: 'DEPOSIT', status: 'PENDING', manual: true },
-			orderBy: { createdAt: 'desc' },
-			select: {
-				id: true,
-				txHash: true,
-				note: true,
-				payCurrency: true,
-				user: { select: { firstName: true, lastName: true } }
-			}
-		}),
-		prisma.manualWallet.findMany({ select: { payCurrency: true, address: true } })
-	]);
-	const currentAddress = new Map(wallets.map((wallet) => [wallet.payCurrency, wallet.address.trim()]));
+	const rows = await prisma.walletRequest.findMany({
+		where: { type: 'DEPOSIT', status: 'PENDING', manual: true },
+		orderBy: { createdAt: 'desc' },
+		select: {
+			id: true,
+			txHash: true,
+			user: { select: { firstName: true, lastName: true } }
+		}
+	});
 
 	return rows.map((row) => ({
 		id: row.id,
 		name: `${row.user.firstName} ${row.user.lastName}`.trim(),
-		txHash: row.txHash || '',
-		address: addressFromNote(row.note) || currentAddress.get(row.payCurrency || '') || '',
-		network: row.payCurrency ? payCurrencyLabel(row.payCurrency) : ''
+		txHash: row.txHash || ''
 	}));
+}
+
+/** The casino wallets players are currently shown, one entry per address with every network it serves. */
+export async function listReceivingAddresses(): Promise<ReceivingAddress[]> {
+	const wallets = await prisma.manualWallet.findMany({
+		where: { enabled: true },
+		select: { payCurrency: true, address: true }
+	});
+	const order = (id: string) => {
+		const index = PAY_CURRENCIES.findIndex((coin) => coin.id === id);
+		return index === -1 ? PAY_CURRENCIES.length : index;
+	};
+	const grouped = new Map<string, string[]>();
+
+	for (const wallet of wallets.sort((a, b) => order(a.payCurrency) - order(b.payCurrency))) {
+		const address = wallet.address.trim();
+		if (!address) continue;
+		grouped.set(address, [...(grouped.get(address) || []), payCurrencyLabel(wallet.payCurrency)]);
+	}
+
+	return [...grouped].map(([address, networks]) => ({ address, networks }));
 }
 
 async function lockWallet(client: Prisma.TransactionClient, userId: string) {

@@ -1,5 +1,5 @@
 import { isSignedIn } from '@/lib/auth';
-import { listPendingDeposits } from '@/lib/deposits';
+import { listPendingDeposits, listReceivingAddresses } from '@/lib/deposits';
 import { logout } from './actions';
 import { DepositBoard } from './deposit-board';
 import { LogOutIcon } from './icons';
@@ -12,7 +12,7 @@ export default async function Page() {
 		return <LoginForm />;
 	}
 
-	const deposits = await listPendingDeposits();
+	const [deposits, wallets] = await Promise.all([listPendingDeposits(), listReceivingAddresses()]);
 
 	return (
 		<div className="shell">
@@ -29,7 +29,7 @@ export default async function Page() {
 				</form>
 			</header>
 			<main className="content">
-				<DepositBoard initial={deposits} />
+				<DepositBoard initial={deposits} wallets={wallets} />
 			</main>
 		</div>
 	);

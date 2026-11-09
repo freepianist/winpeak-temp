@@ -292,6 +292,57 @@ code {
 	animation: rise 0.35s ease both;
 }
 
+/* Receiving addresses */
+
+.wallets {
+	margin-bottom: 32px;
+}
+
+.section-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 12px;
+	color: var(--gold);
+}
+
+.section-title h2 {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.wallet-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+	gap: 12px;
+}
+
+.wallet-card {
+	padding: 14px;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	backdrop-filter: blur(14px);
+	transition: border-color 0.2s ease;
+}
+
+.wallet-card:hover {
+	border-color: rgba(244, 183, 64, 0.35);
+}
+
+.wallet-card .copy-field {
+	gap: 10px;
+}
+
+.wallet-card .copy-line code {
+	white-space: normal;
+	word-break: break-all;
+	line-height: 1.5;
+}
+
 /* Board header */
 
 .board-head {
@@ -382,9 +433,9 @@ code {
 
 .row {
 	display: grid;
-	grid-template-columns: minmax(170px, 0.9fr) minmax(0, 1.5fr) minmax(0, 1.5fr) auto;
-	align-items: end;
-	gap: 18px;
+	grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr) auto;
+	align-items: center;
+	gap: 20px;
 	padding: 14px 20px;
 	border-top: 1px solid var(--border);
 	transition:
@@ -483,8 +534,13 @@ code {
 
 .field-head {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
-	gap: 8px;
+	gap: 6px;
+}
+
+.row .field-head:not(:has(.network)) {
+	display: none;
 }
 
 .field-head:empty,
@@ -620,10 +676,6 @@ code {
 	min-width: 0;
 }
 
-.modal-details .network {
-	margin-bottom: 6px;
-}
-
 .modal-details code {
 	display: block;
 	font-size: 12px;
@@ -744,6 +796,14 @@ code {
 	}
 
 	.row-head {
+		display: none;
+	}
+
+	.row .field-head:not(:has(.network)) {
+		display: flex;
+	}
+
+	.wallet-card .caption {
 		display: none;
 	}
 
