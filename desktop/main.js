@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Notification, Tray, ipcMain, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Menu, Notification, Tray, clipboard, ipcMain, nativeImage, shell } = require('electron');
 const path = require('path');
 
 const APP_ID = 'com.depositrequests.desktop';
@@ -116,6 +116,11 @@ ipcMain.on('deposits:notify', (_event, title, body) => {
 	if (win && !win.isFocused()) {
 		win.flashFrame(true);
 	}
+});
+
+ipcMain.handle('clipboard:write', (_event, text) => {
+	clipboard.writeText(String(text).slice(0, 500));
+	return true;
 });
 
 ipcMain.on('deposits:count', (_event, count) => {

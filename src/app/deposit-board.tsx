@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PendingDeposit, ReceivingAddress } from '@/lib/deposits';
 import { approve } from './actions';
-import { AlertIcon, CheckIcon, CopyIcon, InboxIcon, WalletIcon } from './icons';
+import { AlertIcon, CheckIcon, CloseIcon, CopyIcon, InboxIcon, WalletIcon } from './icons';
 
 const POLL_MS = 5_000;
 const FRESH_MS = 8_000;
@@ -11,6 +11,7 @@ const FRESH_MS = 8_000;
 type DesktopBridge = {
 	notify: (title: string, body: string) => void;
 	setPendingCount: (count: number) => void;
+	copy?: (text: string) => Promise<boolean>;
 };
 
 declare global {
@@ -52,6 +53,24 @@ function since(date: Date | null, now: number) {
 	return seconds < 2 ? 'just now' : `${seconds}s ago`;
 }
 
+/** For windows where the async clipboard API is refused, such as an unfocused or embedded view. */
+function copyWithTextarea(value: string) {
+	const textarea = document.createElement('textarea');
+	textarea.value = value;
+	textarea.setAttribute('readonly', '');
+	textarea.style.position = 'fixed';
+	textarea.style.opacity = '0';
+	document.body.appendChild(textarea);
+	textarea.select();
+	try {
+		return document.execCommand('copy');
+	} catch {
+		return false;
+	} finally {
+		textarea.remove();
+	}
+}
+
 function CopyField(props: {
 	value: string;
 	label: string;
@@ -90,6 +109,7 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 	const [online, setOnline] = useState(true);
 	const [now, setNow] = useState(() => Date.now());
 	const [confirming, setConfirming] = useState<PendingDeposit | null>(null);
+	const [showWallets, setShowWallets] = useState(false);
 	const [approving, setApproving] = useState<string | null>(null);
 	const [toasts, setToasts] = useState<Toast[]>([]);
 	const known = useRef(new Set(initial.map((deposit) => deposit.id)));
@@ -159,13 +179,15 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 	}, [deposits.length]);
 
 	useEffect(() => {
-		if (!confirming) return;
+		if (!confirming && !showWallets) return;
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key === 'Escape' && !approving) setConfirming(null);
+			if (event.key !== 'Escape') return;
+			setShowWallets(false);
+			if (!approving) setConfirming(null);
 		};
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
-	}, [confirming, approving]);
+	}, [confirming, showWallets, approving]);
 
 	const confirmApprove = async () => {
 		if (!confirming) return;
@@ -196,40 +218,27 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 	};
 
 	const copy = async (value: string, label: string) => {
-		try {
-			await navigator.clipboard.writeText(value);
-			pushToast({ kind: 'success', title: `${label} copied` });
-		} catch {
-			pushToast({ kind: 'error', title: 'Could not copy' });
-		}
+		const copied = window.desktop?.copy
+			? await window.desktop.copy(value).catch(() => false)
+			: await navigator.clipboard
+					.writeText(value)
+					.then(() => true)
+					.catch(() => copyWithTextarea(value));
+		pushToast(copied ? { kind: 'success', title: `${label} copied` } : { kind: 'error', title: 'Could not copy' });
 	};
 
 	return (
 		<>
-			<section className="wallets">
-				<div className="section-title">
-					<WalletIcon size={16} />
-					<h2>Receiving addresses</h2>
-				</div>
-				{wallets.length === 0 ? (
-					<p className="muted">No receiving wallets are enabled right now.</p>
-				) : (
-					<div className="wallet-grid">
-						{wallets.map((wallet) => (
-							<div key={wallet.address} className="wallet-card">
-								<CopyField value={wallet.address} label="Address" tags={wallet.networks} onCopy={copy} />
-							</div>
-						))}
-					</div>
-				)}
-			</section>
-
 			<section className="board-head">
 				<div>
 					<h2>Pending deposits</h2>
 					<p className="muted">Manual crypto deposits waiting for review</p>
 				</div>
 				<div className="board-stats">
+					<button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowWallets(true)}>
+						<WalletIcon size={15} />
+						Receiving addresses
+					</button>
 					<div className={`live ${online ? '' : 'live-off'}`}>
 						<span className="live-dot" />
 						{online ? 'Live' : 'Reconnecting'}
@@ -317,6 +326,40 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 								{approving ? 'Approving' : 'Approve deposit'}
 							</button>
 						</div>
+					</div>
+				</div>
+			) : null}
+
+			{showWallets ? (
+				<div className="modal-backdrop" onClick={() => setShowWallets(false)}>
+					<div
+						className="modal modal-wide"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="wallets-title"
+						onClick={(event) => event.stopPropagation()}
+					>
+						<div className="modal-header">
+							<div className="modal-icon modal-icon-gold">
+								<WalletIcon size={22} />
+							</div>
+							<button type="button" className="icon-btn" onClick={() => setShowWallets(false)} title="Close" autoFocus>
+								<CloseIcon size={16} />
+							</button>
+						</div>
+						<h3 id="wallets-title">Receiving addresses</h3>
+						<p className="muted">The wallets players are shown when they deposit.</p>
+						{wallets.length === 0 ? (
+							<p className="wallet-empty muted">No receiving wallets are enabled right now.</p>
+						) : (
+							<div className="wallet-list">
+								{wallets.map((wallet) => (
+									<div key={wallet.address} className="wallet-card">
+										<CopyField value={wallet.address} label="Address" tags={wallet.networks} onCopy={copy} />
+									</div>
+								))}
+							</div>
+						)}
 					</div>
 				</div>
 			) : null}

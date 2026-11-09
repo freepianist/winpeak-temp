@@ -289,43 +289,49 @@ code {
 	max-width: 1280px;
 	margin: 0 auto;
 	padding: 32px 28px 64px;
-	animation: rise 0.35s ease both;
 }
 
 /* Receiving addresses */
 
-.wallets {
-	margin-bottom: 32px;
+.modal-wide {
+	max-width: 560px;
+	max-height: calc(100vh - 48px);
+	overflow-y: auto;
 }
 
-.section-title {
+.modal-header {
 	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-bottom: 12px;
+	align-items: flex-start;
+	justify-content: space-between;
+	margin-bottom: 16px;
+}
+
+.modal-header .modal-icon {
+	margin-bottom: 0;
+}
+
+.modal-icon.modal-icon-gold {
 	color: var(--gold);
+	background: var(--gold-soft);
+	border-color: rgba(244, 183, 64, 0.3);
 }
 
-.section-title h2 {
-	font-size: 13px;
-	font-weight: 600;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--muted);
+.wallet-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 20px;
 }
 
-.wallet-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-	gap: 12px;
+.wallet-empty {
+	margin-top: 20px;
 }
 
 .wallet-card {
 	padding: 14px;
-	background: var(--panel);
+	background: rgba(4, 8, 20, 0.35);
 	border: 1px solid var(--border);
 	border-radius: 12px;
-	backdrop-filter: blur(14px);
 	transition: border-color 0.2s ease;
 }
 
