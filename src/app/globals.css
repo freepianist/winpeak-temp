@@ -449,6 +449,11 @@ code {
 /* Panel + rows */
 
 .panel {
+	display: grid;
+	grid-template-columns: minmax(160px, 1.15fr) max-content minmax(0, 2fr) auto;
+	column-gap: 20px;
+	row-gap: 0;
+	padding: 0 20px;
 	background: var(--panel);
 	border: 1px solid var(--border);
 	border-radius: var(--radius);
@@ -459,9 +464,11 @@ code {
 
 .row {
 	display: grid;
-	grid-template-columns: minmax(160px, 1.1fr) minmax(120px, 0.7fr) minmax(0, 2fr) auto;
+	grid-template-columns: subgrid;
+	grid-column: 1 / -1;
 	align-items: center;
-	gap: 20px;
+	/* Cancel the panel's side padding so the header and hover fill the whole table. */
+	margin-inline: -20px;
 	padding: 14px 20px;
 	border-top: 1px solid var(--border);
 	transition:
@@ -472,6 +479,47 @@ code {
 
 .row:not(.row-head):hover {
 	background: rgba(255, 255, 255, 0.025);
+}
+
+.row:not(.row-head) {
+	grid-template-rows: auto auto auto;
+}
+
+.row > .player {
+	grid-column: 1;
+	grid-row: 1 / -1;
+}
+
+.row > .row-action {
+	grid-column: 4;
+	grid-row: 1 / -1;
+}
+
+.row > .request-amount {
+	grid-column: 2;
+	grid-row: 2;
+	align-self: center;
+}
+
+.row > .copy-field {
+	display: contents;
+}
+
+.row .field-head {
+	grid-column: 3;
+	grid-row: 1;
+	margin-bottom: 6px;
+}
+
+.row .copy-line {
+	grid-column: 3;
+	grid-row: 2;
+}
+
+.row .check-link {
+	grid-column: 3;
+	grid-row: 3;
+	margin-top: 6px;
 }
 
 .row-head {
@@ -536,11 +584,13 @@ code {
 .request-amount {
 	display: flex;
 	flex-direction: column;
+	justify-content: center;
 	gap: 4px;
 	font-size: 15px;
 	font-weight: 700;
 	font-variant-numeric: tabular-nums;
 	letter-spacing: -0.01em;
+	line-height: 1.2;
 	white-space: nowrap;
 }
 
@@ -638,9 +688,11 @@ code {
 
 .empty {
 	display: flex;
+	grid-column: 1 / -1;
 	flex-direction: column;
 	align-items: center;
 	gap: 8px;
+	margin-inline: -20px;
 	padding: 64px 20px 72px;
 	border-top: 1px solid var(--border);
 	text-align: center;
@@ -842,12 +894,26 @@ code {
 		padding-right: 16px;
 	}
 
-	.row {
+	.panel {
 		grid-template-columns: minmax(0, 1fr) auto auto;
-		align-items: center;
+		padding: 0 16px;
 	}
 
-	.row .request-amount {
+	.row,
+	.empty {
+		margin-inline: -16px;
+	}
+
+	.row {
+		padding-inline: 16px;
+	}
+
+	.row > .player {
+		grid-column: 1;
+		grid-row: 1;
+	}
+
+	.row > .request-amount {
 		grid-column: 2;
 		grid-row: 1;
 		justify-self: end;
@@ -857,11 +923,29 @@ code {
 		display: none;
 	}
 
-	.row .copy-field {
+	.row .field-head,
+	.row .copy-line,
+	.row .check-link {
 		grid-column: 1 / -1;
 	}
 
-	.row .row-action {
+	.row .field-head {
+		grid-row: 2;
+	}
+
+	.row .copy-line {
+		grid-row: 3;
+	}
+
+	.row .check-link {
+		grid-row: 4;
+	}
+
+	.row:not(.row-head) {
+		grid-template-rows: auto auto auto auto;
+	}
+
+	.row > .row-action {
 		grid-column: 3;
 		grid-row: 1;
 	}
@@ -933,15 +1017,22 @@ code {
 		white-space: nowrap;
 	}
 
+	.panel {
+		padding: 0 16px;
+	}
+
 	.row {
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
 		gap: 12px;
+		margin-inline: -16px;
 		padding: 16px;
 	}
 
-	.row .copy-field,
+	.row .field-head,
+	.row .copy-line,
+	.row .check-link,
 	.row .request-amount,
 	.row .row-action {
 		grid-column: auto;
@@ -949,8 +1040,14 @@ code {
 		width: 100%;
 	}
 
+	.row .field-head,
+	.row .check-link {
+		margin: 0;
+	}
+
 	.row .request-amount {
 		justify-self: start;
+		align-items: flex-start;
 		white-space: normal;
 	}
 
@@ -1031,6 +1128,7 @@ code {
 	}
 
 	.empty {
+		margin-inline: -16px;
 		padding: 40px 16px 48px;
 	}
 }
