@@ -13,6 +13,9 @@ export type PendingDeposit = {
 	name: string;
 	txHash: string;
 	payCurrency: string | null;
+	/** Requested deposit, in the player's wallet currency. */
+	amount: number;
+	currency: string;
 };
 
 export type ReceivingAddress = {
@@ -26,9 +29,10 @@ export async function listPendingDeposits(): Promise<PendingDeposit[]> {
 		orderBy: { createdAt: 'desc' },
 		select: {
 			id: true,
+			amount: true,
 			txHash: true,
 			payCurrency: true,
-			user: { select: { firstName: true, lastName: true } }
+			user: { select: { firstName: true, lastName: true, wallet: { select: { currency: true } } } }
 		}
 	});
 
@@ -36,7 +40,9 @@ export async function listPendingDeposits(): Promise<PendingDeposit[]> {
 		id: row.id,
 		name: `${row.user.firstName} ${row.user.lastName}`.trim(),
 		txHash: row.txHash || '',
-		payCurrency: row.payCurrency
+		payCurrency: row.payCurrency,
+		amount: money(row.amount),
+		currency: row.user.wallet?.currency || 'USD'
 	}));
 }
 

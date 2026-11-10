@@ -459,7 +459,7 @@ code {
 
 .row {
 	display: grid;
-	grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr) auto;
+	grid-template-columns: minmax(160px, 1.1fr) minmax(120px, 0.7fr) minmax(0, 2fr) auto;
 	align-items: center;
 	gap: 20px;
 	padding: 14px 20px;
@@ -530,6 +530,17 @@ code {
 	font-weight: 600;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.request-amount {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 15px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.01em;
 	white-space: nowrap;
 }
 
@@ -832,8 +843,18 @@ code {
 	}
 
 	.row {
-		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-columns: minmax(0, 1fr) auto auto;
 		align-items: center;
+	}
+
+	.row .request-amount {
+		grid-column: 2;
+		grid-row: 1;
+		justify-self: end;
+	}
+
+	.row .request-amount .caption {
+		display: none;
 	}
 
 	.row .copy-field {
@@ -841,7 +862,7 @@ code {
 	}
 
 	.row .row-action {
-		grid-column: 2;
+		grid-column: 3;
 		grid-row: 1;
 	}
 
@@ -921,10 +942,20 @@ code {
 	}
 
 	.row .copy-field,
+	.row .request-amount,
 	.row .row-action {
 		grid-column: auto;
 		grid-row: auto;
 		width: 100%;
+	}
+
+	.row .request-amount {
+		justify-self: start;
+		white-space: normal;
+	}
+
+	.row .request-amount .caption {
+		display: inline;
 	}
 
 	.player-name {

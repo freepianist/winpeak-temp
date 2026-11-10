@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PendingDeposit, ReceivingAddress } from '@/lib/deposits';
+import { formatMoney } from '@/lib/money';
 import { explorerTxUrl, payCurrencyLabel } from '@/lib/payments/currencies';
 import { approve } from './actions';
 import { AlertIcon, CheckIcon, CloseIcon, CopyIcon, ExternalIcon, InboxIcon, WalletIcon } from './icons';
@@ -152,7 +153,10 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 		const arrived = next.filter((deposit) => !known.current.has(deposit.id));
 
 		if (arrived.length === 1) {
-			notify('New deposit request', `${arrived[0].name} · ${shortHash(arrived[0].txHash)}`);
+			notify(
+				'New deposit request',
+				`${arrived[0].name} · ${formatMoney(arrived[0].amount, arrived[0].currency)}`
+			);
 		} else if (arrived.length > 1) {
 			notify(`${arrived.length} new deposit requests`, arrived.map((deposit) => deposit.name).join(', '));
 		}
@@ -218,7 +222,11 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 			return;
 		}
 
-		pushToast({ kind: 'success', title: 'Deposit approved', body: `${deposit.name} has been credited` });
+		pushToast({
+			kind: 'success',
+			title: 'Deposit approved',
+			body: `${deposit.name} credited ${formatMoney(deposit.amount, deposit.currency)}`
+		});
 		setLeaving((current) => new Set(current).add(deposit.id));
 		window.setTimeout(() => {
 			setDeposits((current) => current.filter((item) => item.id !== deposit.id));
@@ -270,6 +278,7 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 				{deposits.length > 0 ? (
 					<div className="row row-head">
 						<span>Player</span>
+						<span>Amount</span>
 						<span>Transaction hash</span>
 						<span />
 					</div>
@@ -295,6 +304,10 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 								</span>
 								<span className="player-name">{deposit.name}</span>
 								{fresh.has(deposit.id) ? <span className="badge-new">New</span> : null}
+							</div>
+							<div className="request-amount">
+								<span className="caption">Amount</span>
+								<span>{formatMoney(deposit.amount, deposit.currency)}</span>
 							</div>
 							<CopyField
 								value={deposit.txHash}
@@ -331,6 +344,10 @@ export function DepositBoard({ initial, wallets }: { initial: PendingDeposit[]; 
 							<div>
 								<dt>Player</dt>
 								<dd>{confirming.name}</dd>
+							</div>
+							<div>
+								<dt>Amount</dt>
+								<dd>{formatMoney(confirming.amount, confirming.currency)}</dd>
 							</div>
 							{confirming.payCurrency ? (
 								<div>
